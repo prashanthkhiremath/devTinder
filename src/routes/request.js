@@ -4,12 +4,14 @@ const requestRouter = express.Router();
 const { userAuth } = require("../middlewares/auth");
 const ConnectionRequest = require("../models/connectionRequest");
 const User = require("../models/user");
+const { sendEmail } = require("../utils/sendEmail");
 
 requestRouter.post(
   "/request/send/:status/:toUserId",
   userAuth,
   async (req, res) => {
     try {
+      const fromUser = req.user;
       const fromUserId = req.user._id;
       const toUserId = req.params.toUserId;
       const status = req.params.status;
@@ -45,6 +47,28 @@ requestRouter.post(
       });
 
       const data = await connectionRequest.save();
+
+      if (req.params.status === "interested") {
+        try {
+          const emailHtml = `
+        <div style="font-family: sans-serif; border: 1px solid #eee; padding: 20px;">
+          <h2>New Connection Request!</h2>
+          <p>Hi <b>${toUser.firstName}</b>,</p>
+          <p><b>${fromUser.firstName} ${fromUser.lastName}</b> is interested in connecting with you on DevTinder.</p>
+          <p>Check out their profile and decide if you want to match!</p>
+          <a href="https://devtinderconnect.in/requests" style="background: #E94057; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px;">View Request</a>
+        </div>
+      `;
+          await sendEmail(
+            toUser.emailId,
+            `New Request from ${fromUser.firstName}!`,
+            emailHtml,
+          );
+        } catch (emailErr) {
+          // Log but don't stop the request
+          console.error("Email failed, but DB save was successful.");
+        }
+      }
 
       res.json({
         message:

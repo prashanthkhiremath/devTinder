@@ -4,6 +4,7 @@ const authRouter = express.Router();
 const { validateSignUpData } = require("../utils/validation");
 const User = require("../models/user");
 const bcrypt = require("bcrypt");
+const { sendEmail } = require("../utils/sendEmail");
 
 authRouter.post("/signup", async (req, res) => {
   try {
@@ -22,15 +23,37 @@ authRouter.post("/signup", async (req, res) => {
       password: passwordHash,
       emailId,
     });
-    await user.save();
+    const savedUser = await user.save();
+
+    try {
+      const welcomeHtml = `
+        <div style="font-family: Arial, sans-serif; text-align: center; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
+          <h1 style="color: #E94057;">Welcome to the DevTinder Community!</h1>
+          <p>Thanks for joining, <b>${user.firstName}</b>.</p>
+          <p>You can now connect with thousands of senior engineers in Bengaluru and beyond.</p>
+          <hr style="border: 0; border-top: 1px solid #eee;" />
+          <p style="font-size: 12px; color: #777;">Domain: devtinderconnect.in</p>
+        </div>
+      `;
+
+      await sendEmail(user.emailId, "Welcome to DevTinder!", welcomeHtml);
+    } catch (emailErr) {
+      console.error(
+        "Welcome Email failed to send for:",
+        user.emailId,
+        "Error:",
+        emailErr.message,
+      );
+    }
     const token = await savedUser.getJWT();
 
     res.cookie("token", token, {
       expires: new Date(Date.now() + 8 * 3600000),
+      httpOnly: true, // Prevents JavaScript from reading the cookie (XSS protection)
+      secure: process.env.NODE_ENV === "production", // Only sends over HTTPS in prod
     });
 
     res.json({ message: "User Added successfully!", data: savedUser });
-    res.send("user saved successfully");
   } catch (err) {
     res.status(400).send("ERROR:" + err.message);
   }
